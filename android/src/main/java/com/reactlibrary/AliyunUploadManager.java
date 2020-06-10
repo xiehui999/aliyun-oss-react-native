@@ -46,6 +46,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -55,6 +56,7 @@ public class AliyunUploadManager {
 
     /**
      * AliyunUploadManager contructor
+     *
      * @param oss
      */
     public AliyunUploadManager(OSS oss) {
@@ -63,6 +65,7 @@ public class AliyunUploadManager {
 
     /**
      * asyncUpload
+     *
      * @param context
      * @param bucketName
      * @param ossFile
@@ -73,6 +76,7 @@ public class AliyunUploadManager {
     public void asyncUpload(final ReactContext context, String bucketName, String ossFile, String sourceFile, ReadableMap options, final Promise promise) {
         // Content to file:// start
         Uri selectedVideoUri = Uri.parse(sourceFile);
+        final long[] lastTime = {new Date().getTime()};
 
         // 1. content uri -> file path
         // 2. inputstream -> temp file path
@@ -102,13 +106,17 @@ public class AliyunUploadManager {
             @Override
             public void onProgress(PutObjectRequest request, long currentSize, long totalSize) {
                 Log.d("PutObject", "currentSize: " + currentSize + " totalSize: " + totalSize);
-                String str_currentSize = Long.toString(currentSize);
-                String str_totalSize = Long.toString(totalSize);
-                WritableMap onProgressValueData = Arguments.createMap();
-                onProgressValueData.putString("currentSize", str_currentSize);
-                onProgressValueData.putString("totalSize", str_totalSize);
-                context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                        .emit("uploadProgress", onProgressValueData);
+                long currentTime = new Date().getTime();
+                if (currentTime - lastTime[0] > 1000) {
+                    lastTime[0] =currentTime;
+                    String str_currentSize = Long.toString(currentSize);
+                    String str_totalSize = Long.toString(totalSize);
+                    WritableMap onProgressValueData = Arguments.createMap();
+                    onProgressValueData.putString("currentSize", str_currentSize);
+                    onProgressValueData.putString("totalSize", str_totalSize);
+                    context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                            .emit("uploadProgress", onProgressValueData);
+                }
             }
         });
 
@@ -123,7 +131,7 @@ public class AliyunUploadManager {
 
             @Override
             public void onFailure(PutObjectRequest request, ClientException clientExcepion, ServiceException serviceException) {
-                PromiseExceptionManager.resolvePromiseException(clientExcepion,serviceException,promise);
+                PromiseExceptionManager.resolvePromiseException(clientExcepion, serviceException, promise);
             }
         });
         Log.d("AliyunOSS", "OSS uploadObjectAsync ok!");
@@ -131,17 +139,17 @@ public class AliyunUploadManager {
 
     /**
      * asyncAppendObject
+     *
      * @param bucketName
      * @param objectKey
      * @param uploadFilePath
      * @param options
      * @param promise
      */
-    public void asyncAppendObject(final ReactContext context,String bucketName,String objectKey,String uploadFilePath,ReadableMap options,final Promise promise) {
+    public void asyncAppendObject(final ReactContext context, String bucketName, String objectKey, String uploadFilePath, ReadableMap options, final Promise promise) {
 
         // Content to file:// start
         Uri selectedVideoUri = Uri.parse(uploadFilePath);
-
         // 1. content uri -> file path
         // 2. inputstream -> temp file path
         Cursor cursor = null;
@@ -173,6 +181,7 @@ public class AliyunUploadManager {
             @Override
             public void onProgress(AppendObjectRequest request, long currentSize, long totalSize) {
                 Log.d("AppendObject", "currentSize: " + currentSize + " totalSize: " + totalSize);
+
                 // add event
                 String str_currentSize = Long.toString(currentSize);
                 String str_totalSize = Long.toString(totalSize);
@@ -181,6 +190,7 @@ public class AliyunUploadManager {
                 onProgressValueData.putString("totalSize", str_totalSize);
                 context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                         .emit("uploadProgress", onProgressValueData);
+
             }
         });
 
@@ -190,13 +200,14 @@ public class AliyunUploadManager {
                 Log.d("AppendObject", "AppendSuccess");
                 Log.d("NextPosition", "" + result.getNextPosition());
                 WritableMap map = Arguments.createMap();
-                map.putString("AppendObject","AppendSuccess");
+                map.putString("AppendObject", "AppendSuccess");
                 map.putDouble("NextPosition", result.getNextPosition());
                 promise.resolve(map);
             }
+
             @Override
             public void onFailure(AppendObjectRequest request, ClientException clientExcepion, ServiceException serviceException) {
-                PromiseExceptionManager.resolvePromiseException(clientExcepion,serviceException,promise);
+                PromiseExceptionManager.resolvePromiseException(clientExcepion, serviceException, promise);
             }
         });
     }
@@ -244,11 +255,12 @@ public class AliyunUploadManager {
 
     /**
      * initMultipartUpload
+     *
      * @param bucketName
      * @param objectKey
      * @param promise
      */
-    public void initMultipartUpload(String bucketName,String objectKey,final Promise promise) {
+    public void initMultipartUpload(String bucketName, String objectKey, final Promise promise) {
         String uploadId;
         InitiateMultipartUploadRequest init = new InitiateMultipartUploadRequest(bucketName, objectKey);
         InitiateMultipartUploadResult initResult = null;
@@ -267,6 +279,7 @@ public class AliyunUploadManager {
 
     /**
      * multipartUpload
+     *
      * @param context
      * @param bucketName
      * @param objectKey
@@ -275,7 +288,7 @@ public class AliyunUploadManager {
      * @param options
      * @param promise
      */
-    public void multipartUpload(final ReactContext context,String bucketName, String objectKey, String uploadId,String filepath, ReadableMap options,final Promise promise) {
+    public void multipartUpload(final ReactContext context, String bucketName, String objectKey, String uploadId, String filepath, ReadableMap options, final Promise promise) {
 
         Uri selectedVideoUri = Uri.parse(filepath);
         // 1. content uri -> file path
@@ -309,7 +322,7 @@ public class AliyunUploadManager {
         long uploadedLength = 0;
         List<PartETag> partETags = new ArrayList<PartETag>(); // 保存分片上传的结果
         while (uploadedLength < fileLength) {
-            int partLength = (int)Math.min(partSize, fileLength - uploadedLength);
+            int partLength = (int) Math.min(partSize, fileLength - uploadedLength);
             byte[] partData = new byte[0]; // 按照分片大小读取文件的一段内容
             try {
                 partData = IOUtils.readStreamAsBytesArray(input, partLength);
@@ -334,7 +347,7 @@ public class AliyunUploadManager {
             currentIndex++;
         }
 
-        CompleteMultipartUploadRequest complete = new CompleteMultipartUploadRequest(bucketName, objectKey,uploadId,partETags);
+        CompleteMultipartUploadRequest complete = new CompleteMultipartUploadRequest(bucketName, objectKey, uploadId, partETags);
         CompleteMultipartUploadResult completeResult = null;
         try {
             completeResult = mOSS.completeMultipartUpload(complete);
@@ -354,12 +367,13 @@ public class AliyunUploadManager {
 
     /**
      * abortMultipartUpload
+     *
      * @param bucketName
      * @param objectKey
      * @param uploadId
      * @param promise
      */
-    public void abortMultipartUpload(String bucketName,String objectKey,String uploadId,final Promise promise) {
+    public void abortMultipartUpload(String bucketName, String objectKey, String uploadId, final Promise promise) {
         AbortMultipartUploadRequest abort = new AbortMultipartUploadRequest(bucketName, objectKey, uploadId);
         try {
             mOSS.abortMultipartUpload(abort);
@@ -375,12 +389,13 @@ public class AliyunUploadManager {
 
     /**
      * listParts
+     *
      * @param bucketName
      * @param objectKey
      * @param uploadId
      * @param promise
      */
-    public void listParts (String bucketName,String objectKey,String uploadId,final Promise promise) {
+    public void listParts(String bucketName, String objectKey, String uploadId, final Promise promise) {
         ListPartsRequest listParts = new ListPartsRequest(bucketName, objectKey, uploadId);
         ListPartsResult result = null;
         try {
@@ -401,9 +416,9 @@ public class AliyunUploadManager {
             Log.d("listParts", "lastModified: " + result.getParts().get(i).getLastModified());
             Log.d("listParts", "partSize: " + result.getParts().get(i).getSize());
             listPartsData.putInt("partNum" + i, result.getParts().get(i).getPartNumber());
-            listPartsData.putString("partEtag"+i,result.getParts().get(i).getETag());
+            listPartsData.putString("partEtag" + i, result.getParts().get(i).getETag());
 //          listPartsData.("lastModified" + i,result.getParts().get(i).getLastModified());
-            listPartsData.putDouble("partSize"+i,result.getParts().get(i).getSize());
+            listPartsData.putDouble("partSize" + i, result.getParts().get(i).getSize());
         }
         promise.resolve(listPartsData);
     }
